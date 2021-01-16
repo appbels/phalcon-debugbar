@@ -58,6 +58,16 @@ class Profiler extends  PhalconProfiler {
 		}
 	}
 
+    /**
+     * Check if the profile is started or not.
+     * 
+     * @return bool
+     */
+    public function isStarted(): bool
+	{
+	    return ($this->_stoped === false && isset($this->_activeProfile) && $this->_activeProfile->getFinalTime() === null);
+	}
+
 	/**
 	 * Starts the profile of a SQL sentence
 	 *

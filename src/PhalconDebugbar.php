@@ -650,7 +650,7 @@ PROXY_CLASS;
     }
 
     /**
-     * @param Adapter $db
+     * @param \Phalcon\Db\Adapter\AdapterInterface $db
      */
     public function attachDb($db)
     {
@@ -702,11 +702,18 @@ PROXY_CLASS;
                     $queryCollector
                 ) {
                     $profiler->setDb($db);
-                    if ($event->getType() == 'beforeQuery') {
-                        $sql = $db->getRealSQLStatement();
-                        $bindTypes = $db->getSQLBindTypes();
-                        if (stripos(strtr($sql, [' ' => '']), 'SELECTIF(COUNT(*)>0,1,0)FROM`INFORMATION_SCHEMA`.`TABLES`') === false
-                            && stripos($sql, 'DESCRIBE') !== 0) {
+                    // method getRealSQLStatement no longer works and returns null instead of a string ?!?
+                    $sql = $db->getRealSQLStatement() ?: $db->getSQLStatement();
+                    $sqlNoSpace = strtr($sql, [' ' => '']);
+
+                    if (
+                        stripos($sqlNoSpace, 'SELECTIF(COUNT(*)>0,1,0)FROM`INFORMATION_SCHEMA`.`TABLES`') === false
+                        && stripos($sql, 'DESCRIBE') !== 0 && stripos($sqlNoSpace, 'SHOWFULLCOLUMNS') !== 0
+                    ) {
+                        // It seems that the 'afterQuery' event is called before the 'beforeQuery'
+                        // @see https://github.com/phalcon/cphalcon/issues/15249
+                        if ($event->getType() === 'beforeQuery' || ($event->getType() === 'afterQuery' && !$profiler->isStarted())) {
+                            $bindTypes = $db->getSQLBindTypes();
                             $profiler->startProfile($sql, $params, $bindTypes);
                             if ($queryCollector->getFindSource()) {
                                 try {
@@ -716,11 +723,8 @@ PROXY_CLASS;
                                 }
                             }
                         }
-                    }
-                    if ($event->getType() == 'afterQuery') {
-                        $sql = $db->getRealSQLStatement();
-                        if (stripos(strtr($sql, [' ' => '']), 'SELECTIF(COUNT(*)>0,1,0)FROM`INFORMATION_SCHEMA`.`TABLES`') === false
-                            && stripos($sql, 'DESCRIBE') !== 0) {
+                        
+                        if ($event->getType() === 'afterQuery' || ($event->getType() === 'beforeQuery' && $profiler->isStarted())) {
                             $profiler->stopProfile();
                         }
                     }
